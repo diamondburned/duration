@@ -9,6 +9,218 @@ import (
 // Duration is a standard unit of time.
 type Duration time.Duration
 
+// String returns a string representing the duration in the form "3d1h3m".
+// Leading zero units are omitted. As a special case, durations less than one
+// second format use a smaller unit (milli-, micro-, or nanoseconds) to ensure
+// that the leading digit is non-zero. The zero duration formats as 0s.
+func (d Duration) String() string {
+	// Largest time is 2540400h10m10.000000000s
+	var buf [32]byte
+	w := len(buf)
+
+	u := uint64(d)
+	neg := d < 0
+	if neg {
+		u = -u
+	}
+
+	if u < uint64(Second) {
+		// Special case: if duration is smaller than a second,
+		// use smaller units, like 1.2ms
+		var prec int
+		w--
+		buf[w] = 's'
+		w--
+		switch {
+		case u == 0:
+			return "0s"
+		case u < uint64(Microsecond):
+			// print nanoseconds
+			prec = 0
+			buf[w] = 'n'
+		case u < uint64(Millisecond):
+			// print microseconds
+			prec = 3
+			// U+00B5 'µ' micro sign == 0xC2 0xB5
+			w-- // Need room for two bytes.
+			copy(buf[w:], "µ")
+		default:
+			// print milliseconds
+			prec = 6
+			buf[w] = 'm'
+		}
+		w, u = fmtFrac(buf[:w], u, prec)
+		w = fmtInt(buf[:w], u)
+
+	} else if u > uint64(Week) {
+		// Special case: if duration is larger than a week,
+		// use bigger units like 4w3d2h
+		w--
+		buf[w] = 'h'
+
+		u /= uint64(Hour)
+
+		// u is now integer hours
+		w = fmtInt(buf[:w], u%24)
+		u /= 24
+
+		// u is now integer days
+		if u > 0 {
+			w--
+			buf[w] = 'd'
+			w = fmtInt(buf[:w], u%7)
+			u /= 7
+
+			// u is now integer weeks
+			// Stop at hours because days can be different lengths.
+			if u > 0 {
+				w--
+				buf[w] = 'w'
+				w = fmtInt(buf[:w], u)
+			}
+		}
+
+	} else if u > uint64(Day) {
+		// Special case: if duration is larger than a day,
+		// use bigger units like 3d2h6m
+		w--
+		buf[w] = 'm'
+
+		u /= uint64(Minute)
+
+		// u is now integer minutes
+		w = fmtInt(buf[:w], u%60)
+		u /= 60
+
+		// u is now integer hours
+		if u > 0 {
+			w--
+			buf[w] = 'h'
+			w = fmtInt(buf[:w], u%24)
+			u /= 24
+
+			// u is now integer weeks
+			if u > 0 {
+				w--
+				buf[w] = 'd'
+				w = fmtInt(buf[:w], u)
+			}
+		}
+
+	} else {
+		w--
+		buf[w] = 's'
+
+		w, u = fmtFrac(buf[:w], u, 9)
+
+		// u is now integer seconds
+		w = fmtInt(buf[:w], u%60)
+		u /= 60
+
+		// u is now integer minutes
+		if u > 0 {
+			w--
+			buf[w] = 'm'
+			w = fmtInt(buf[:w], u%60)
+			u /= 60
+
+			// u is now integer hours
+			// Stop at hours because days can be different lengths.
+			if u > 0 {
+				w--
+				buf[w] = 'h'
+				w = fmtInt(buf[:w], u)
+			}
+		}
+	}
+
+	if neg {
+		w--
+		buf[w] = '-'
+	}
+
+	return string(buf[w:])
+}
+
+// fmtFrac formats the fraction of v/10**prec (e.g., ".12345") into the
+// tail of buf, omitting trailing zeros.  it omits the decimal
+// point too when the fraction is 0.  It returns the index where the
+// output bytes begin and the value v/10**prec.
+func fmtFrac(buf []byte, v uint64, prec int) (nw int, nv uint64) {
+	// Omit trailing zeros up to and including decimal point.
+	w := len(buf)
+	print := false
+	for i := 0; i < prec; i++ {
+		digit := v % 10
+		print = print || digit != 0
+		if print {
+			w--
+			buf[w] = byte(digit) + '0'
+		}
+		v /= 10
+	}
+	if print {
+		w--
+		buf[w] = '.'
+	}
+	return w, v
+}
+
+// fmtInt formats v into the tail of buf.
+// It returns the index where the output begins.
+func fmtInt(buf []byte, v uint64) int {
+	w := len(buf)
+	if v == 0 {
+		w--
+		buf[w] = '0'
+	} else {
+		for v > 0 {
+			w--
+			buf[w] = byte(v%10) + '0'
+			v /= 10
+		}
+	}
+	return w
+}
+
+// Nanoseconds returns the duration as an integer nanosecond count.
+func (d Duration) Nanoseconds() int64 { return int64(d) }
+
+// Seconds returns the duration as a floating point number of seconds.
+func (d Duration) Seconds() float64 {
+	sec := d / Second
+	nsec := d % Second
+	return float64(sec) + float64(nsec)*1e-9
+}
+
+// Hours returns the duration as a floating point number of hours.
+func (d Duration) Hours() float64 {
+	hour := d / Hour
+	nsec := d % Hour
+	return float64(hour) + float64(nsec)*(1e-9/60/60)
+}
+
+// Days returns the duration as a floating point number of days.
+func (d Duration) Days() float64 {
+	hour := d / Hour
+	nsec := d % Hour
+	return float64(hour) + float64(nsec)*(1e-9/60/60/24)
+}
+
+// Weeks returns the duration as a floating point number of days.
+func (d Duration) Weeks() float64 {
+	hour := d / Hour
+	nsec := d % Hour
+	return float64(hour) + float64(nsec)*(1e-9/60/60/24/7)
+}
+
+// Minutes returns the duration as a floating point number of minutes.
+func (d Duration) Minutes() float64 {
+	min := d / Minute
+	nsec := d % Minute
+	return float64(min) + float64(nsec)*(1e-9/60)
+}
+
 // Standard unit of time.
 var (
 	Nanosecond  = Duration(time.Nanosecond)
@@ -68,7 +280,7 @@ var unitMap = map[string]int64{
 // decimal numbers, each with optional fraction and a unit suffix,
 // such as "300ms", "-1.5h" or "2h45m".
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w", "y".
-func ParseDuration(s string) (time.Duration, error) {
+func ParseDuration(s string) (Duration, error) {
 	// [-+]?([0-9]*(\.[0-9]*)?[a-z]+)+
 	orig := s
 	var d int64
@@ -169,5 +381,5 @@ func ParseDuration(s string) (time.Duration, error) {
 	if neg {
 		d = -d
 	}
-	return time.Duration(d), nil
+	return Duration(d), nil
 }
