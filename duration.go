@@ -232,11 +232,11 @@ var (
 	Day         = Hour * 24
 	Week        = Day * 7
 	Fortnight   = Week * 2
-	Month       = Day * 30
-	Year        = Day * 365
-	Decade      = Year * 10
-	Century     = Year * 100
-	Millennium  = Year * 1000
+	Month       = Day * 30    // Approximation
+	Year        = Day * 365   // Approximation
+	Decade      = Year * 10   // Approximation
+	Century     = Year * 100  // Approximation
+	Millennium  = Year * 1000 // Approximation
 )
 
 var errLeadingInt = errors.New("duration: bad [0-9]*") // never printed
