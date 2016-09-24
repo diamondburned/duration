@@ -12,7 +12,9 @@ type Duration time.Duration
 // String returns a string representing the duration in the form "3d1h3m".
 // Leading zero units are omitted. As a special case, durations less than one
 // second format use a smaller unit (milli-, micro-, or nanoseconds) to ensure
-// that the leading digit is non-zero. The zero duration formats as 0s.
+// that the leading digit is non-zero. Duration more than a day or more than a
+// week lose granularity and are truncated to resp. days-hours-minutes and
+// weeks-days-hours. The zero duration formats as 0s.
 func (d Duration) String() string {
 	// Largest time is 2540400h10m10.000000000s
 	var buf [32]byte
@@ -273,6 +275,7 @@ var unitMap = map[string]int64{
 	"h":  int64(Hour),
 	"d":  int64(Day),
 	"w":  int64(Week),
+	"y":  int64(Year), // Approximation
 }
 
 // ParseDuration parses a duration string.
