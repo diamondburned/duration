@@ -1,9 +1,8 @@
-# duration
+# [duration][GoDoc]
 
 Parse standard units of time, based on go's stdlib time implementation.
 
-[GoDoc]: https://godoc.org/maze.io/duration.v1
-[GoDoc Widget]: https://godoc.org/maze.io/duration.v1?status.svg
+[GoDoc]: https://godoc.org/github.com/diamondburned/duration
 
 ## Disclaimer
 
